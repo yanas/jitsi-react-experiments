@@ -10,12 +10,20 @@ var config = {
         path: BUILD_DIR,
         filename: 'bundle.js'
     },
+    devServer: {
+        publicPath: "/build/",
+        port: 8080
+    },
     module : {
         loaders : [
             {
                 test : /\.js$/,
                 include : APP_DIR,
-                loader : 'babel'
+                loader : 'babel',
+                query:
+                {
+                    presets:['es2015', 'react']
+                }
             },
             {
                 test: /\.less$/,
