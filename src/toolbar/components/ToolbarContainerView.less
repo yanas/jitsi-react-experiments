@@ -1,0 +1,71 @@
+@import '../../style.less';
+@import '../../styles/font.less';
+
+.toolbar {
+  display:inline-block;
+  position:relative;
+  top:5px;
+  margin-left:auto;
+  margin-right:auto;
+  height:38px;
+  width:auto;
+  background-color: @transparent-black;
+  border-radius: 1px;
+  pointer-events: auto;
+}
+
+.toolbar a.button:last-child::after {
+  content: none;
+}
+
+#toolbar_button_chat, #chatBottomButton, #contactListButton, #numberOfParticipants {
+  -webkit-transition: all .5s ease-in-out;
+  -moz-transition: all .5s ease-in-out;
+  transition: all .5s ease-in-out;
+}
+/*#ffde00*/
+#toolbar_button_chat.active, #contactListButton.glowing, #chatBottomButton.glowing {
+  -webkit-text-shadow:    -1px 0 10px #00ccff,
+  0 1px 10px @jitsi-blue,
+  1px 0 10px @jitsi-blue,
+    0 -1px 10px @jitsi-blue;
+  -moz-text-shadow:   1px 0 10px @jitsi-blue,
+  0 1px 10px @jitsi-blue,
+  1px 0 10px @jitsi-blue,
+    0 -1px 10px @jitsi-blue;
+  text-shadow:    -1px 0 10px @jitsi-blue,
+  0 1px 10px @jitsi-blue,
+  1px 0 10px @jitsi-blue,
+    0 -1px 10px @jitsi-blue;
+}
+
+#toolbar_button_hangup {
+  color: @jitsi-red;
+  font-size: 1.4em;
+}
+
+#toolbar_button_record {
+  -webkit-transition: all .5s ease-in-out;
+  -moz-transition: all .5s ease-in-out;
+  transition: all .5s ease-in-out;
+}
+
+.button {
+  display: inline-block;
+  position: relative;
+  color: #FFFFFF;
+  top:0px;
+  padding-top: 10px;
+  width: 38px;
+  height: 28px;
+  cursor: pointer;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255,255,255,.3), 0 -1px 0 rgba(0,0,0,.6);
+  z-index: 1;
+  font-size: 1.22em !important;
+  vertical-align: middle;
+}
+
+.button[disabled] {
+  opacity: 0.5;
+}
