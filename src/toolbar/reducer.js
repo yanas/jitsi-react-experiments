@@ -73,6 +73,15 @@ const initialState = [
     }
 ];
 
+/**
+ * Sub-reducer for a single toolbar button. On CLICK_BUTTON, toggles the
+ * `toggled` flag if the action targets this button and the button supports
+ * toggling (i.e. `toggled` is defined). Returns the button unchanged otherwise.
+ *
+ * @param {Object} toolbarButton - A single button entry from the state array.
+ * @param {Object} action - The dispatched Redux action.
+ * @returns {Object} The next state for this button.
+ */
 const toolbarButtonReducer = (toolbarButton, action) => {
     switch (action.type) {
         case t.CLICK_BUTTON:
