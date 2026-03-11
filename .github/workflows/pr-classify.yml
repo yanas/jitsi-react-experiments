@@ -36,6 +36,7 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           model: claude-haiku-4-5-20251001
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           direct_prompt: |
             You are classifying a pull request for jitsi-meet, an open-source WebRTC
