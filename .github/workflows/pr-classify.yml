@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
 
 jobs:
   classify:
@@ -33,38 +32,53 @@ jobs:
       - name: Classify PR
         id: classifier
         continue-on-error: true
-        uses: anthropics/claude-code-action@beta
-        with:
-          model: claude-haiku-4-5-20251001
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          direct_prompt: |
-            You are classifying a pull request for jitsi-meet, an open-source WebRTC
-            video conferencing platform built with React/Redux for web and React Native for mobile.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          CHANGED_FILES=$(cat /tmp/changed_files.txt)
+          DIFF_STAT=$(cat /tmp/diff_stat.txt)
 
-            PR Title: ${{ github.event.pull_request.title }}
-            PR Body: ${{ github.event.pull_request.body }}
+          PROMPT="You are classifying a pull request for jitsi-meet, an open-source WebRTC
+          video conferencing platform built with React/Redux for web and React Native for mobile.
 
-            Changed files:
-            $(cat /tmp/changed_files.txt)
+          PR Title: $PR_TITLE
+          PR Body: $PR_BODY
 
-            Diff stat:
-            $(cat /tmp/diff_stat.txt)
+          Changed files:
+          $CHANGED_FILES
 
-            Platform hints for changed files:
-            - Files in android/, *.android.ts → platform: android
-            - Files in ios/, *.ios.ts → platform: ios
-            - Files matching *.native.ts or in react-native-sdk/ → platform: native
-            - Files matching *.web.ts, *.web.tsx, css/, webpack.config.js, modules/ → platform: web
-            - Files matching *.any.ts or in react/features/ with no platform suffix → could be multiple platforms
+          Diff stat:
+          $DIFF_STAT
 
-            Based ONLY on the PR title, body, and changed files listed above, respond with ONLY
-            valid JSON (no explanation, no markdown fences):
-            {
-              "type": "<feature|fix|chore|refactor|language|documentation|test|security>",
-              "platforms": ["<web|android|ios|native>"],
-              "summary": "<1-2 sentence plain English summary of what this PR does>"
-            }
+          Platform hints for changed files:
+          - Files in android/, *.android.ts → platform: android
+          - Files in ios/, *.ios.ts → platform: ios
+          - Files matching *.native.ts or in react-native-sdk/ → platform: native
+          - Files matching *.web.ts, *.web.tsx, css/, webpack.config.js, modules/ → platform: web
+          - Files matching *.any.ts or in react/features/ with no platform suffix → could be multiple platforms
+
+          Based ONLY on the PR title, body, and changed files listed above, respond with ONLY
+          valid JSON (no explanation, no markdown fences):
+          {
+            \"type\": \"<feature|fix|chore|refactor|language|documentation|test|security>\",
+            \"platforms\": [\"<web|android|ios|native>\"],
+            \"summary\": \"<1-2 sentence plain English summary of what this PR does>\"
+          }"
+
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$(jq -n --arg prompt "$PROMPT" '{
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 256,
+              messages: [{role: "user", content: $prompt}]
+            }')")
+
+          OUTPUT=$(echo "$RESPONSE" | jq -r '.content[0].text')
+          echo "output=$OUTPUT" >> $GITHUB_OUTPUT
 
       - name: Apply labels and post comment
         if: always()
@@ -93,12 +107,11 @@ jobs:
                   const validPlatforms = ['web', 'android', 'ios', 'native'];
 
                   if (validTypes.includes(parsed.type)) {
-                    typeLabel = `type: ${parsed.type}`;
+                    typeLabel = parsed.type;
                   }
                   if (Array.isArray(parsed.platforms)) {
                     platformLabels = parsed.platforms
-                      .filter(p => validPlatforms.includes(p))
-                      .map(p => `platform: ${p}`);
+                      .filter(p => validPlatforms.includes(p));
                   }
                   summary = parsed.summary || null;
                 }
@@ -108,10 +121,12 @@ jobs:
               }
             }
 
-            // --- Remove old type:/platform: labels ---
+            // --- Remove old type/platform labels ---
+            const validTypes = ['feature', 'fix', 'chore', 'refactor', 'language', 'documentation', 'test', 'security'];
+            const validPlatforms = ['web', 'android', 'ios', 'native'];
             const existingLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
             const toRemove = existingLabels.data
-              .filter(l => l.name.startsWith('type: ') || l.name.startsWith('platform: '))
+              .filter(l => validTypes.includes(l.name) || validPlatforms.includes(l.name))
               .map(l => l.name);
 
             for (const label of toRemove) {
@@ -132,7 +147,7 @@ jobs:
             if (parseError || !typeLabel) {
               await github.rest.issues.createComment({
                 owner, repo, issue_number,
-                body: `> [!WARNING]\n> **PR classification** could not determine the PR type. Please apply a \`type:\` label manually.`
+                body: `> [!WARNING]\n> **PR classification** could not determine the PR type. Please apply a type label manually.`
               });
             } else if (summary) {
               const platformStr = platformLabels.length > 0
