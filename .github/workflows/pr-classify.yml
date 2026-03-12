@@ -93,12 +93,11 @@ jobs:
                   const validPlatforms = ['web', 'android', 'ios', 'native'];
 
                   if (validTypes.includes(parsed.type)) {
-                    typeLabel = `type: ${parsed.type}`;
+                    typeLabel = parsed.type;
                   }
                   if (Array.isArray(parsed.platforms)) {
                     platformLabels = parsed.platforms
-                      .filter(p => validPlatforms.includes(p))
-                      .map(p => `platform: ${p}`);
+                      .filter(p => validPlatforms.includes(p));
                   }
                   summary = parsed.summary || null;
                 }
@@ -108,10 +107,12 @@ jobs:
               }
             }
 
-            // --- Remove old type:/platform: labels ---
+            // --- Remove old type/platform labels ---
+            const validTypes = ['feature', 'fix', 'chore', 'refactor', 'language', 'documentation', 'test', 'security'];
+            const validPlatforms = ['web', 'android', 'ios', 'native'];
             const existingLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
             const toRemove = existingLabels.data
-              .filter(l => l.name.startsWith('type: ') || l.name.startsWith('platform: '))
+              .filter(l => validTypes.includes(l.name) || validPlatforms.includes(l.name))
               .map(l => l.name);
 
             for (const label of toRemove) {
@@ -132,7 +133,7 @@ jobs:
             if (parseError || !typeLabel) {
               await github.rest.issues.createComment({
                 owner, repo, issue_number,
-                body: `> [!WARNING]\n> **PR classification** could not determine the PR type. Please apply a \`type:\` label manually.`
+                body: `> [!WARNING]\n> **PR classification** could not determine the PR type. Please apply a type label manually.`
               });
             } else if (summary) {
               const platformStr = platformLabels.length > 0
