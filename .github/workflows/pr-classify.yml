@@ -7,13 +7,12 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
 
 jobs:
   classify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
@@ -30,43 +29,44 @@ jobs:
       - name: Classify PR
         id: classifier
         continue-on-error: true
-        uses: anthropics/claude-code-action@beta
-        with:
-          model: claude-haiku-4-5-20251001
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          direct_prompt: |
-            You are classifying a pull request for jitsi-meet, an open-source WebRTC
-            video conferencing platform built with React/Redux for web and React Native for mobile.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          CHANGED_FILES=$(cat /tmp/changed_files.txt)
+          DIFF_STAT=$(cat /tmp/diff_stat.txt)
 
-            PR Title: ${{ github.event.pull_request.title }}
-            PR Body: ${{ github.event.pull_request.body }}
+          # Build payload entirely inside jq to prevent shell injection
+          # from PR_TITLE or PR_BODY supplied by external contributors.
+          PAYLOAD=$(jq -n \
+            --arg title "$PR_TITLE" \
+            --arg body "$PR_BODY" \
+            --arg files "$CHANGED_FILES" \
+            --arg stat "$DIFF_STAT" \
+            '{
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 256,
+              messages: [{
+                role: "user",
+                content: ("You are classifying a pull request for jitsi-meet, an open-source WebRTC video conferencing platform built with React/Redux for web and React Native for mobile.\n\nPR Title: " + $title + "\nPR Body: " + $body + "\n\nChanged files:\n" + $files + "\n\nDiff stat:\n" + $stat + "\n\nPlatform hints for changed files:\n- Files in android/, *.android.ts \u2192 platform: android\n- Files in ios/, *.ios.ts \u2192 platform: ios\n- Files matching *.native.ts or in react-native-sdk/ \u2192 platform: native\n- Files matching *.web.ts, *.web.tsx, css/, webpack.config.js, modules/ \u2192 platform: web\n- Files matching *.any.ts or in react/features/ with no platform suffix \u2192 could be multiple platforms\n\nBased ONLY on the PR title, body, and changed files listed above, respond with ONLY valid JSON (no explanation, no markdown fences):\n{\n  \"type\": \"<feature|fix|chore|refactor|language|documentation|test|security>\",\n  \"platforms\": [\"<web|android|ios|native>\"],\n  \"summary\": \"<1-2 sentence plain English summary of what this PR does>\"\n}")
+              }]
+            }')
 
-            Changed files:
-            $(cat /tmp/changed_files.txt)
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$PAYLOAD")
 
-            Diff stat:
-            $(cat /tmp/diff_stat.txt)
-
-            Platform hints for changed files:
-            - Files in android/, *.android.ts → platform: android
-            - Files in ios/, *.ios.ts → platform: ios
-            - Files matching *.native.ts or in react-native-sdk/ → platform: native
-            - Files matching *.web.ts, *.web.tsx, css/, webpack.config.js, modules/ → platform: web
-            - Files matching *.any.ts or in react/features/ with no platform suffix → could be multiple platforms
-
-            Based ONLY on the PR title, body, and changed files listed above, respond with ONLY
-            valid JSON (no explanation, no markdown fences):
-            {
-              "type": "<feature|fix|chore|refactor|language|documentation|test|security>",
-              "platforms": ["<web|android|ios|native>"],
-              "summary": "<1-2 sentence plain English summary of what this PR does>"
-            }
+          OUTPUT=$(echo "$RESPONSE" | jq -r '.content[0].text' | tr -d '\n')
+          echo "output<<EOF_DELIMITER" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF_DELIMITER" >> $GITHUB_OUTPUT
 
       - name: Apply labels
         if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -74,23 +74,18 @@ jobs:
             const repo = context.repo.repo;
             const issue_number = pr.number;
 
-            const validTypes = ['feature', 'fix', 'chore', 'refactor', 'language', 'documentation', 'test', 'security'];
-            const validPlatforms = ['web', 'android', 'ios', 'native'];
-
-            // Read the JSON posted as a comment by claude-code-action
-            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
-            const botComment = comments.data
-              .reverse()
-              .find(c => c.user.login === 'github-actions[bot]' && c.body.includes('"type"'));
-
+            // Use toJSON() to safely embed the output — prevents quote injection
+            const classifierOutput = ${{ toJSON(steps.classifier.outputs.output) }};
             let typeLabel = null;
             let platformLabels = [];
 
-            if (botComment) {
+            if (classifierOutput) {
               try {
-                const match = botComment.body.match(/\{[\s\S]*\}/);
+                const match = classifierOutput.match(/\{[\s\S]*\}/);
                 if (match) {
                   const parsed = JSON.parse(match[0]);
+                  const validTypes = ['feature', 'fix', 'chore', 'refactor', 'language', 'documentation', 'test', 'security'];
+                  const validPlatforms = ['web', 'android', 'ios', 'native'];
                   if (validTypes.includes(parsed.type)) typeLabel = parsed.type;
                   if (Array.isArray(parsed.platforms)) {
                     platformLabels = parsed.platforms.filter(p => validPlatforms.includes(p));
@@ -99,12 +94,11 @@ jobs:
               } catch (e) {
                 core.warning(`Failed to parse classifier output: ${e.message}`);
               }
-
-              // Delete the raw JSON comment
-              await github.rest.issues.deleteComment({ owner, repo, comment_id: botComment.id });
             }
 
             // Remove old type/platform labels
+            const validTypes = ['feature', 'fix', 'chore', 'refactor', 'language', 'documentation', 'test', 'security'];
+            const validPlatforms = ['web', 'android', 'ios', 'native'];
             const existingLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number });
             const toRemove = existingLabels.data
               .filter(l => validTypes.includes(l.name) || validPlatforms.includes(l.name))
