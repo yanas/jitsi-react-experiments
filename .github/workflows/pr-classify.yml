@@ -66,6 +66,17 @@ jobs:
               "summary": "<1-2 sentence plain English summary of what this PR does>"
             }
 
+      - name: Delete classifier comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments)
+          COMMENT_ID=$(echo "$COMMENTS" | jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | test("\"type\":")))][0].id')
+          if [ "$COMMENT_ID" != "null" ] && [ -n "$COMMENT_ID" ]; then
+            gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID
+          fi
+
       - name: Apply labels and post comment
         if: always()
         uses: actions/github-script@v7
