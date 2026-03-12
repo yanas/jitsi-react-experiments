@@ -77,8 +77,10 @@ jobs:
               messages: [{role: "user", content: $prompt}]
             }')")
 
-          OUTPUT=$(echo "$RESPONSE" | jq -r '.content[0].text')
-          echo "output=$OUTPUT" >> $GITHUB_OUTPUT
+          OUTPUT=$(echo "$RESPONSE" | jq -r '.content[0].text' | tr -d '\n')
+          echo "output<<EOF_DELIMITER" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF_DELIMITER" >> $GITHUB_OUTPUT
 
       - name: Apply labels and post comment
         if: always()
