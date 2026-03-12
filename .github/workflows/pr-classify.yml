@@ -96,7 +96,6 @@ jobs:
             const classifierOutput = '${{ steps.classifier.outputs.output }}';
             let typeLabel = null;
             let platformLabels = [];
-            let summary = null;
             let parseError = false;
 
             if (classifierOutput) {
@@ -115,7 +114,6 @@ jobs:
                     platformLabels = parsed.platforms
                       .filter(p => validPlatforms.includes(p));
                   }
-                  summary = parsed.summary || null;
                 }
               } catch (e) {
                 parseError = true;
@@ -145,18 +143,3 @@ jobs:
               await github.rest.issues.addLabels({ owner, repo, issue_number, labels: labelsToAdd });
             }
 
-            // --- Post classification comment ---
-            if (parseError || !typeLabel) {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number,
-                body: `> [!WARNING]\n> **PR classification** could not determine the PR type. Please apply a type label manually.`
-              });
-            } else if (summary) {
-              const platformStr = platformLabels.length > 0
-                ? `\n> **Platforms:** ${platformLabels.map(p => '`' + p + '`').join(', ')}`
-                : '';
-              await github.rest.issues.createComment({
-                owner, repo, issue_number,
-                body: `> [!NOTE]\n> **PR classification:** \`${typeLabel}\`${platformStr}\n>\n> ${summary}`
-              });
-            }
