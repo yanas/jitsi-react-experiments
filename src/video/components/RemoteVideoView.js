@@ -3,6 +3,9 @@
  */
 import React from 'react';
 
+/**
+ * Renders the remote participant's video stream.
+ */
 class RemoteVideoView extends React.Component {
     render () {
         return <p> Remote video view </p>;
