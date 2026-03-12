@@ -27,6 +27,7 @@ class ToolbarContainerView extends React.Component {
                     i18nTextKey={toolbarButton.i18nTextKey}
                     tooltipText={toolbarButton.tooltipText}
                     toggled={toolbarButton.toggled}
+                    unreadMessages={toolbarButton.unreadMessages}
                     //{...toolbarButton}
                     onClick={() => this.props.onToolbarClick(toolbarButton.id)}
                     />
