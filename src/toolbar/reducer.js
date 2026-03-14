@@ -1,5 +1,17 @@
 import * as t from './actionTypes';
 
+/**
+ * Each toolbar button in the state has the following shape:
+ *   id              {string}  - unique identifier (e.g. "toolbar_button_mute")
+ *   buttonClassName {string}  - CSS classes for the default (un-toggled) state
+ *   toggledClassName{string}  - CSS classes when the button is toggled on (optional)
+ *   buttonShortcut  {string}  - keyboard shortcut popover key (optional)
+ *   i18nTextKey     {string}  - i18n key used to set the button's accessible text
+ *   tooltipText     {string}  - human-readable tooltip
+ *   toggled         {boolean} - current toggle state; absence means non-toggleable
+ *   disabled        {boolean} - whether the button is currently disabled (optional)
+ *   unreadMessages  {number}  - unread count badge, used by the chat button (optional)
+ */
 const initialState = [
     {
         id: "toolbar_button_mute",
@@ -73,6 +85,15 @@ const initialState = [
     }
 ];
 
+/**
+ * Sub-reducer for a single toolbar button. On CLICK_BUTTON, toggles the
+ * `toggled` flag if the action targets this button and the button supports
+ * toggling (i.e. `toggled` is defined). Returns the button unchanged otherwise.
+ *
+ * @param {Object} toolbarButton - A single button entry from the state array.
+ * @param {Object} action - The dispatched Redux action.
+ * @returns {Object} The next state for this button.
+ */
 const toolbarButtonReducer = (toolbarButton, action) => {
     switch (action.type) {
         case t.CLICK_BUTTON:
